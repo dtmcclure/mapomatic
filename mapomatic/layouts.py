@@ -33,6 +33,7 @@ from rustworkx import PyGraph, PyDiGraph, vf2_mapping  # pylint:disable=no-name-
 from qiskit.converters import circuit_to_dag
 from qiskit.transpiler.coupling import CouplingMap
 from qiskit.providers.backend import BackendV1, BackendV2
+from qiskit.providers import BackendPropertyError
 
 
 def matching_layouts(circ, cmap, strict_direction=True, call_limit=int(3e7)):
@@ -233,8 +234,14 @@ def default_cost(circ, layouts, backend):
             if item[0].num_qubits == 2 and item[0].name != 'barrier':
                 q0 = circ.find_bit(item[1][0]).index
                 q1 = circ.find_bit(item[1][1]).index
-                fid *= (1-props.gate_error(item[0].name, [layout[q0],
-                                           layout[q1]]))
+                try:
+                    fid *= (1-props.gate_error(item[0].name, [layout[q0],
+                                               layout[q1]]))
+                except BackendPropertyError: # non-native direction; reverse and penalize
+                    fid *= (1-props.gate_error(item[0].name, [layout[q1],
+                                               layout[q0]]))
+                    for q in [q0, q1]:
+                        fid *= 1-props.gate_error('sx', layout[q])
 
             elif item[0].name in ['sx', 'x']:
                 q0 = circ.find_bit(item[1][0]).index
